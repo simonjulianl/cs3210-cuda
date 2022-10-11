@@ -1,16 +1,17 @@
 # Makefile
 
-NVCC         := /usr/local/cuda-11/bin/nvcc
-COMMON_SRCS  := src/common.cpp
-CUDA_SRCS    := src/kernel.cu
+NVCC          := /usr/local/cuda-11/bin/nvcc
+COMMON_SRCS   := src/common.cpp
+CUDA_SRCS     := src/kernel.cu
 
-OUTPUT       := scanner
+OUTPUT        := scanner
 
-EXEC_SEQ     := scanner-seq
-EXEC         := scanner
-SIGNATURES   := signatures/sigs-exact.txt
+EXEC_SEQ      := scanner-seq
+EXEC          := scanner
+SIGNATURES    := signatures/sigs-exact.txt
 
-SAMPLE_INPUT := virus-0001-Win.Downloader.Banload-242+Win.Trojan.Matrix-8.in
+SAMPLE_INPUT  := virus-0001-Win.Downloader.Banload-242+Win.Trojan.Matrix-8.in
+SAMPLE_INPUT2 := virus-0002-Win.Downloader.Zlob-1779+Html.Phishing.Bank-532.in
 
 .DEFAULT_TARGET: all
 
@@ -24,6 +25,9 @@ run_seq:
 
 run:
 	./${EXEC} ${SIGNATURES} tests/${SAMPLE_INPUT}
+
+run2:
+	./${EXEC} ${SIGNATURES} tests/${SAMPLE_INPUT} tests/${SAMPLE_INPUT2}
 
 clean:
 	rm -f $(OUTPUT)

@@ -37,9 +37,61 @@
 
 #include "defs.h"
 
-__global__ void matchFile(const uint8_t* file_data, size_t file_len, const char* signature, size_t len)
+// Sanity check to run on CPU
+/*
+void cpuMatchFile(const uint8_t* file_data, size_t file_len, const uint8_t* signature, size_t len) {
+	for (int i = 0; i < file_len - len + 1; i++) {
+		for (int j = 0; j < len; j++) {
+			if (file_data[i + j] != signature[j]) {
+				break;
+			}
+			printf("%d %d %d\n", i + j, j, (int) file_data[i + j + 1]);
+			if (j == len - 1) {
+				printf("HEHEHE");
+				return;
+			}
+		}
+	}
+}
+*/
+
+__global__ void matchFile(const uint8_t* file_data, size_t file_len, const uint8_t* signature, size_t len, int* d_sig_match)
 {
 	// TODO: your code!
+	for (int i = 0; i < file_len - len + 1; i++) {
+		for (int j = 0; j < len; j++) {
+			if (file_data[i + j] != signature[j]) {
+				break;
+			}
+			if (j == len - 1) {
+				*d_sig_match = 1;
+				return;
+			}
+		}
+	}
+}
+
+// Inspired by https://stackoverflow.com/questions/17261798/converting-a-hex-string-to-a-byte-array
+int hex2dec(char char1) {
+  if (char1 >= '0' && char1 <= '9')
+    return char1 - '0';
+  if (char1 >= 'A' && char1 <= 'F')
+    return char1 - 'A' + 10;
+  if (char1 >= 'a' && char1 <= 'f')
+    return char1 - 'a' + 10;
+	return 0;
+}
+
+int hex2decHelper(char char1, char char2) {
+	return 16 * hex2dec(char1) + hex2dec(char2);
+}
+
+uint8_t* convertStringToByte(char* signature, size_t size) {
+	uint8_t* result = (uint8_t*) malloc(sizeof(uint8_t) * (size / 2));
+	for (int i = 0; i < size / 2; i ++) {
+		result[i] = (uint8_t) hex2decHelper(signature[2 * i], signature[2 * i + 1]);
+	}
+	return result;
 }
 
 void runScanner(std::vector<Signature>& signatures, std::vector<InputFile>& inputs)
@@ -74,12 +126,13 @@ void runScanner(std::vector<Signature>& signatures, std::vector<InputFile>& inpu
 	}
 
 	// allocate memory for the signatures
-	std::vector<char*> sig_bufs {};
+	std::vector<uint8_t*> sig_bufs {};
 	for(size_t i = 0; i < signatures.size(); i++)
 	{
-		char* ptr = 0;
+		uint8_t* ptr = 0;
 		check_cuda_error(cudaMalloc(&ptr, signatures[i].size));
-		cudaMemcpy(ptr, signatures[i].data, signatures[i].size, cudaMemcpyHostToDevice);
+		uint8_t* signature_byte = convertStringToByte(signatures[i].data, signatures[i].size);
+		cudaMemcpy(ptr, signature_byte, signatures[i].size, cudaMemcpyHostToDevice);
 		sig_bufs.push_back(ptr);
 	}
 
@@ -89,6 +142,24 @@ void runScanner(std::vector<Signature>& signatures, std::vector<InputFile>& inpu
 		// (the `inputs`) to device memory (file_bufs, which we allocated above)
 		cudaMemcpyAsync(file_bufs[file_idx], inputs[file_idx].data, inputs[file_idx].size,
 			cudaMemcpyHostToDevice, streams[file_idx]);    // pass in the stream here to do this async
+
+		// allocate memory for the matches
+		std::vector<int*> match_bufs {};
+		for(size_t i = 0; i < signatures.size(); i++)
+		{
+			int* ptr = 0;
+			check_cuda_error(cudaMalloc(&ptr, sizeof(int)));
+			cudaMemcpy(ptr, 0, sizeof(int), cudaMemcpyHostToDevice);
+			match_bufs.push_back(ptr);
+		}
+
+		std::vector<int*> host_match {};
+		for(size_t i = 0; i < signatures.size(); i++)
+		{
+			int* ptr = (int*) malloc(sizeof(int));
+			*ptr = 0;
+			host_match.push_back(ptr);
+		}
 
 		for(size_t sig_idx = 0; sig_idx < signatures.size(); sig_idx++)
 		{
@@ -108,16 +179,41 @@ void runScanner(std::vector<Signature>& signatures, std::vector<InputFile>& inpu
 				128 kernels can run concurrently --- subject to resource constraints. This means
 				you should *definitely* be doing more work per kernel than in our example!
 			*/
+
+			// Sanity check can be useful
+			/*
+			if (sig_idx == 68) {
+				// for (int i = 0; i < inputs[sig_idx].size; i++) {
+				// 	printf("%d ", (int) inputs[file_idx].data[i]);
+				// }
+				printf("%s\n", signatures[sig_idx].name.c_str());
+
+				uint8_t* temp = convertStringToByte(signatures[sig_idx].data, signatures[sig_idx].size);
+				for (int i = 0; i < signatures[sig_idx].size / 2; i++) {
+					printf("%d ", (int) temp[i]);
+				}
+
+				cpuMatchFile(inputs[file_idx].data, inputs[file_idx].size, temp, signatures[sig_idx].size / 2);
+			}
+			*/
+
 			matchFile<<<1, 1, /* shared memory per block: */ 0, streams[file_idx]>>>(
 				file_bufs[file_idx], inputs[file_idx].size,
-				sig_bufs[sig_idx], signatures[sig_idx].size);
+				sig_bufs[sig_idx], signatures[sig_idx].size / 2, match_bufs[sig_idx]);
 
+			cudaMemcpy(host_match[sig_idx], match_bufs[sig_idx], sizeof(int), cudaMemcpyDeviceToHost);
 
-			// example output printing. don't forget to change this!
-			printf("%s: %s\n", inputs[file_idx].name.c_str(), signatures[sig_idx].name.c_str());
+			if (*host_match[sig_idx] == 1) {
+				printf("%s: %s\n", inputs[file_idx].name.c_str(), signatures[sig_idx].name.c_str());
+			}
 		}
-	}
 
+		for (auto buf: host_match)
+			free(buf);
+
+		for(auto buf: match_bufs)
+			cudaFree(buf);
+	}
 
 	// free the device memory, though this is not strictly necessary
 	// (the CUDA driver will clean up when your program exits)
