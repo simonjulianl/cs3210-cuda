@@ -136,30 +136,30 @@ void runScanner(std::vector<Signature>& signatures, std::vector<InputFile>& inpu
 		sig_bufs.push_back(ptr);
 	}
 
+	// allocate memory for the matches
+	std::vector<int*> match_bufs {};
+	for(size_t i = 0; i < signatures.size(); i++)
+	{
+		int* ptr = 0;
+		check_cuda_error(cudaMalloc(&ptr, sizeof(int)));
+		cudaMemcpy(ptr, 0, sizeof(int), cudaMemcpyHostToDevice);
+		match_bufs.push_back(ptr);
+	}
+
+	std::vector<int*> host_match {};
+	for(size_t i = 0; i < signatures.size(); i++)
+	{
+		int* ptr = (int*) malloc(sizeof(int));
+		*ptr = 0;
+		host_match.push_back(ptr);
+	}
+
 	for(size_t file_idx = 0; file_idx < inputs.size(); file_idx++)
 	{
 		// asynchronously copy the file contents from host memory
 		// (the `inputs`) to device memory (file_bufs, which we allocated above)
 		cudaMemcpyAsync(file_bufs[file_idx], inputs[file_idx].data, inputs[file_idx].size,
 			cudaMemcpyHostToDevice, streams[file_idx]);    // pass in the stream here to do this async
-
-		// allocate memory for the matches
-		std::vector<int*> match_bufs {};
-		for(size_t i = 0; i < signatures.size(); i++)
-		{
-			int* ptr = 0;
-			check_cuda_error(cudaMalloc(&ptr, sizeof(int)));
-			cudaMemcpy(ptr, 0, sizeof(int), cudaMemcpyHostToDevice);
-			match_bufs.push_back(ptr);
-		}
-
-		std::vector<int*> host_match {};
-		for(size_t i = 0; i < signatures.size(); i++)
-		{
-			int* ptr = (int*) malloc(sizeof(int));
-			*ptr = 0;
-			host_match.push_back(ptr);
-		}
 
 		for(size_t sig_idx = 0; sig_idx < signatures.size(); sig_idx++)
 		{
@@ -207,13 +207,10 @@ void runScanner(std::vector<Signature>& signatures, std::vector<InputFile>& inpu
 				printf("%s: %s\n", inputs[file_idx].name.c_str(), signatures[sig_idx].name.c_str());
 			}
 		}
-
-		for (auto buf: host_match)
-			free(buf);
-
-		for(auto buf: match_bufs)
-			cudaFree(buf);
 	}
+
+	for(auto buf: match_bufs)
+		cudaFree(buf);
 
 	// free the device memory, though this is not strictly necessary
 	// (the CUDA driver will clean up when your program exits)
