@@ -26,10 +26,9 @@ def parse_signatures(lines: Iterable[str]) -> Iterable[Tuple[bytes, str]]:
 		if '?' not in kv[1]:
 			yield bytes.fromhex(kv[1]), kv[0]
 		else:
-			n = 1024
+			n = 0
 			# https://stackoverflow.com/questions/69792413
-			chars = "0123456789abcdef"
-			random.choices(chars, k=7)
+			chars = random.choices("0123456789abcdef", k=7)
 			for p in map(iter, itertools.product(chars, repeat=kv[1].count('?'))):
 				if n < 1024:
 					n += 1
