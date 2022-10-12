@@ -8,7 +8,7 @@ OUTPUT        := scanner
 
 EXEC_SEQ      := scanner-seq
 EXEC          := scanner
-SIGNATURES    := signatures/sigs-exact.txt
+SIGNATURES    := signatures/sigs-both.txt
 
 SAMPLE_INPUT  := virus-0001-Win.Downloader.Banload-242+Win.Trojan.Matrix-8.in
 SAMPLE_INPUT2 := virus-0002-Win.Downloader.Zlob-1779+Html.Phishing.Bank-532.in

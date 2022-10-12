@@ -61,9 +61,15 @@ __global__ void matchFile(const char* file_data, size_t file_len, const char* si
 	int index;
 	for (int j = 0; j < len; j++) {
 		index = j + blockIdx.x * blockDim.x + threadIdx.x;
-		if (index >= file_len || file_data[index] != signature[j]) {
+		if (index >= file_len) {
 			return;
-		} else if (j == len - 1) {
+		} 
+		
+		if (signature[j] != '?' && file_data[index] != signature[j]) {
+			return; 
+		}
+		
+		if (j == len - 1) {
 			*d_sig_match = 1;
 			return;
 		}
