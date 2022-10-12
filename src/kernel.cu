@@ -58,15 +58,13 @@ void cpuMatchFile(const uint8_t* file_data, size_t file_len, const uint8_t* sign
 __global__ void matchFile(const uint8_t* file_data, size_t file_len, const uint8_t* signature, size_t len, int* d_sig_match)
 {
 	// TODO: your code!
-	for (int i = 0; i < file_len - len + 1; i++) {
-		for (int j = 0; j < len; j++) {
-			if (file_data[i + j] != signature[j]) {
-				break;
-			}
-			if (j == len - 1) {
-				*d_sig_match = 1;
-				return;
-			}
+	for (int j = 0; j < len; j++) {
+		if (file_data[j + blockIdx.x * blockDim.x + threadIdx.x] != signature[j]) {
+			break;
+		}
+		if (j == len - 1) {
+			*d_sig_match = 1;
+			return;
 		}
 	}
 }
@@ -197,9 +195,12 @@ void runScanner(std::vector<Signature>& signatures, std::vector<InputFile>& inpu
 			}
 			*/
 
-			matchFile<<<1, 1, /* shared memory per block: */ 0, streams[file_idx]>>>(
+			int threadsPerBlock = 1024;
+			int blocksPerGrid = (inputs[file_idx].size + threadsPerBlock - 1) / threadsPerBlock;
+			matchFile<<<blocksPerGrid, threadsPerBlock, /* shared memory per block: */ 0, streams[file_idx]>>>(
 				file_bufs[file_idx], inputs[file_idx].size,
 				sig_bufs[sig_idx], signatures[sig_idx].size / 2, match_bufs[sig_idx]);
+			cudaDeviceSynchronize();
 
 			cudaMemcpy(host_match[sig_idx], match_bufs[sig_idx], sizeof(int), cudaMemcpyDeviceToHost);
 
