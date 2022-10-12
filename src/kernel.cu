@@ -59,7 +59,7 @@ __global__ void matchFile(const uint8_t* file_data, size_t file_len, const uint8
 {
 	// TODO: your code!
 	for (int j = 0; j < len; j++) {
-		if (file_data[j + blockIdx.x * blockDim.x + threadIdx.x] != signature[j]) {
+		if (j + blockIdx.x * blockDim.x + threadIdx.x >= file_len || file_data[j + blockIdx.x * blockDim.x + threadIdx.x] != signature[j]) {
 			break;
 		}
 		if (j == len - 1) {
@@ -135,21 +135,31 @@ void runScanner(std::vector<Signature>& signatures, std::vector<InputFile>& inpu
 	}
 
 	// allocate memory for the matches
-	std::vector<int*> match_bufs {};
-	for(size_t i = 0; i < signatures.size(); i++)
+	std::vector<std::vector<int*>> match_bufs {};
+	for(size_t i = 0; i < inputs.size(); i++) 
 	{
-		int* ptr = 0;
-		check_cuda_error(cudaMalloc(&ptr, sizeof(int)));
-		cudaMemcpy(ptr, 0, sizeof(int), cudaMemcpyHostToDevice);
-		match_bufs.push_back(ptr);
+		std::vector<int*> temp {};
+		for(size_t j = 0; j < signatures.size(); j++)
+		{
+			int* ptr = 0;
+			check_cuda_error(cudaMalloc(&ptr, sizeof(int)));
+			cudaMemcpy(ptr, 0, sizeof(int), cudaMemcpyHostToDevice);
+			temp.push_back(ptr);
+		}
+		match_bufs.push_back(temp);
 	}
 
-	std::vector<int*> host_match {};
-	for(size_t i = 0; i < signatures.size(); i++)
+	std::vector<std::vector<int*>> host_match {};
+	for(size_t i = 0; i < inputs.size(); i++)
 	{
-		int* ptr = (int*) malloc(sizeof(int));
-		*ptr = 0;
-		host_match.push_back(ptr);
+		std::vector<int*> temp {};
+		for(size_t j = 0; j < signatures.size(); j++)
+		{
+			int* ptr = (int*) malloc(sizeof(int));
+			*ptr = 0;
+			temp.push_back(ptr);
+		}
+		host_match.push_back(temp);
 	}
 
 	for(size_t file_idx = 0; file_idx < inputs.size(); file_idx++)
@@ -199,19 +209,19 @@ void runScanner(std::vector<Signature>& signatures, std::vector<InputFile>& inpu
 			int blocksPerGrid = (inputs[file_idx].size + threadsPerBlock - 1) / threadsPerBlock;
 			matchFile<<<blocksPerGrid, threadsPerBlock, /* shared memory per block: */ 0, streams[file_idx]>>>(
 				file_bufs[file_idx], inputs[file_idx].size,
-				sig_bufs[sig_idx], signatures[sig_idx].size / 2, match_bufs[sig_idx]);
-			cudaDeviceSynchronize();
+				sig_bufs[sig_idx], signatures[sig_idx].size / 2, match_bufs[file_idx][sig_idx]);
 
-			cudaMemcpy(host_match[sig_idx], match_bufs[sig_idx], sizeof(int), cudaMemcpyDeviceToHost);
+			cudaMemcpy(host_match[file_idx][sig_idx], match_bufs[file_idx][sig_idx], sizeof(int), cudaMemcpyDeviceToHost);
 
-			if (*host_match[sig_idx] == 1) {
+			if (*host_match[file_idx][sig_idx] == 1) {
 				printf("%s: %s\n", inputs[file_idx].name.c_str(), signatures[sig_idx].name.c_str());
 			}
 		}
 	}
 
 	for(auto buf: match_bufs)
-		cudaFree(buf);
+		for(auto b: buf)
+			cudaFree(b);
 
 	// free the device memory, though this is not strictly necessary
 	// (the CUDA driver will clean up when your program exits)
