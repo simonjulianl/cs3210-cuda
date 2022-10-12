@@ -55,9 +55,7 @@
 // 	}
 // }
 
-__global__ void matchFile(const char* file_data, size_t file_len, const char* signature, size_t len, int* d_sig_match)
-{
-	// TODO: your code!
+__device__ void bruteForce(const char* file_data, size_t file_len, const char* signature, size_t len, int* d_sig_match) {
 	int index;
 	for (int j = 0; j < len; j++) {
 		index = j + blockIdx.x * blockDim.x + threadIdx.x;
@@ -68,15 +66,20 @@ __global__ void matchFile(const char* file_data, size_t file_len, const char* si
 		if (signature[j] != '?' && file_data[index] != signature[j]) {
 			return; 
 		}
-		
+
 		if (j == len - 1) {
 			*d_sig_match = 1;
 			return;
 		}
 	}
 }
+__global__ void matchFile(const char* file_data, size_t file_len, const char* signature, size_t len, int* d_sig_match)
+{
+	// TODO: your code!
+	bruteForce(file_data, file_len, signature, len, d_sig_match);
+}
 
-// Source: https://gist.github.com/miguelmota/4fc9b46cf21111af5fa613555c14de92?permalink_comment_id=3085319
+// Inspired by: https://gist.github.com/miguelmota/4fc9b46cf21111af5fa613555c14de92?permalink_comment_id=3085319
 void uint8_to_hex_char_array(const uint8_t *v, const size_t s, char* char_array) {
     std::stringstream ss;
 
