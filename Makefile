@@ -29,5 +29,8 @@ run:
 run2:
 	./${EXEC} ${SIGNATURES} tests/${SAMPLE_INPUT} tests/${SAMPLE_INPUT2}
 
+run10:
+	./scanner signatures/sigs-exact.txt tests/virus-0002-Win.Downloader.Zlob-1779+Html.Phishing.Bank-532.in tests/benign-0001.in tests/virus-0006-Win.Spyware.Banker-483.in tests/virus-0012-Win.Trojan.Bancos-1977+Html.Phishing.Auction-29.in tests/virus-0011-Win.Trojan.Sdbot-52.in tests/benign-0002.in tests/virus-0010-Win.Trojan.Corp-3.in tests/benign-0003.in tests/virus-0007-Win.Trojan.Matrix-8.in tests/virus-0001-Win.Downloader.Banload-242+Win.Trojan.Matrix-8.in
+
 clean:
 	rm -f $(OUTPUT)

@@ -1,0 +1,13 @@
+679f1985adcfb14039bf9ba1245401e503e971351c973906d05a7a20fe0b7a5d
+46319655984
+1487743064
+tests/virus-0001-Win.Downloader.Banload-242+Win.Trojan.Matrix-8.in: Win.Trojan.Matrix-8
+tests/virus-0007-Win.Trojan.Matrix-8.in: Win.Trojan.Matrix-8
+tests/virus-0002-Win.Downloader.Zlob-1779+Html.Phishing.Bank-532.in: Html.Phishing.Bank-532
+tests/virus-0011-Win.Trojan.Sdbot-52.in: Win.Trojan.Sdbot-52
+tests/virus-0001-Win.Downloader.Banload-242+Win.Trojan.Matrix-8.in: Win.Downloader.Banload-242
+tests/virus-0006-Win.Spyware.Banker-483.in: Win.Spyware.Banker-483
+tests/virus-0002-Win.Downloader.Zlob-1779+Html.Phishing.Bank-532.in: Win.Downloader.Zlob-1779
+tests/virus-0012-Win.Trojan.Bancos-1977+Html.Phishing.Auction-29.in: Win.Trojan.Bancos-1977
+tests/virus-0012-Win.Trojan.Bancos-1977+Html.Phishing.Auction-29.in: Html.Phishing.Auction-29
+tests/virus-0010-Win.Trojan.Corp-3.in: Win.Trojan.Corp-3
