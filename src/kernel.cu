@@ -61,51 +61,10 @@ __device__ void bruteForce(const char* file_data, size_t file_len, const char* s
 	}
 }
 
-__device__ void badCharHeuristic(const char *str, size_t size, int badchar[NO_OF_CHARS]) {
-    int i;
-
-    for (i = 0; i < NO_OF_CHARS; i++) {
-        badchar[i] = -1;
-    }
-
-    for (i = 0; i < size; i++) {
-        badchar[(int) str[i]] = i;
-    }
-}
 
 /* A pattern searching function that uses Bad Character Heuristic of Boyer Moore Algorithm, inspired by GFG */
 __device__ void boyerMoore(const char* file_data, size_t file_len, const char* signature, size_t len, int* d_sig_match) {
-	size_t m = len;
-    size_t n = file_len;
-
-    int badchar[NO_OF_CHARS];
-    badCharHeuristic(signature, len, badchar);
-
-    int s = 0, startIndex = blockIdx.x * blockDim.x + threadIdx.x;
-
-    while (s <= (n - m)) {
-        int j = m - 1;
-		int txtIndex = startIndex + s + j;
-
-        while (j >= 0 && signature[j] == file_data[txtIndex]) {
-            j--;
-        }
-
-        if (j < 0) {
-            *d_sig_match = 1;
-            return;
-        } else {
-            s += max(1, j - badchar[file_data[txtIndex]]);
-        }
-    }
-}
-
-__global__ void matchFile(const char* file_data, size_t file_len, const char* signature, size_t len, int* d_sig_match)
-{
-	// TODO: your code!
-	// bruteForce(file_data, file_len, signature, len, d_sig_match);
-	// boyerMoore(file_data, file_len, signature, len, d_sig_match);
-    size_t n = BM_PARTITION_SIZE;
+	size_t n = BM_PARTITION_SIZE;
 
     __shared__ int badchar[NO_OF_CHARS];
 	int i;
@@ -148,10 +107,18 @@ __global__ void matchFile(const char* file_data, size_t file_len, const char* si
 			if (temp >= 0 && temp < NO_OF_CHARS) {
 				s += max(1, j - badchar[temp]);
 			} else {
-				s += 1;
+				s += max(1, j + 1);
 			}
         }
     }
+}
+
+__global__ void matchFile(const char* file_data, size_t file_len, const char* signature, size_t len, int* d_sig_match)
+{
+	// TODO: your code!
+	bruteForce(file_data, file_len, signature, len, d_sig_match);
+	// boyerMoore(file_data, file_len, signature, len, d_sig_match);
+
 }
 
 // Inspired by: https://gist.github.com/miguelmota/4fc9b46cf21111af5fa613555c14de92?permalink_comment_id=3085319
@@ -278,8 +245,8 @@ void runScanner(std::vector<Signature>& signatures, std::vector<InputFile>& inpu
 
 			int actualFileStringSize = inputs[file_idx].size * 2; // 1 byte = 2 hex
 			int threadsPerBlock = NUM_THREADS_PER_BLOCK;
-			// int numBlocks = (actualFileStringSize + threadsPerBlock - 1) / threadsPerBlock; // for brute force, replace one loop with 1 thread
-			int numBlocks = (actualFileStringSize + (NUM_THREADS_PER_BLOCK * BM_PARTITION_SIZE - 1)) / (NUM_THREADS_PER_BLOCK * BM_PARTITION_SIZE); 
+			int numBlocks = (actualFileStringSize + threadsPerBlock - 1) / threadsPerBlock; // for brute force, replace one loop with 1 thread
+			// int numBlocks = (actualFileStringSize + (NUM_THREADS_PER_BLOCK * BM_PARTITION_SIZE - 1)) / (NUM_THREADS_PER_BLOCK * BM_PARTITION_SIZE); 
 
 			// printf("current file index: %zu, signature index: %zu/%zu\n", file_idx, sig_idx, signatures.size());
 			// printf("num blocks: %d\n", numBlocks);
