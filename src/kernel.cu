@@ -39,25 +39,8 @@
 
 #include "defs.h"
 #define NO_OF_CHARS 256
-#define NUM_BLOCKS 1
-#define NUM_THREADS_PER_BLOCK 1
-#define BM_PARTITION_SIZE 243420
-
-// Sanity check to run on CPU
-// void cpuMatchFile(const uint8_t* file_data, size_t file_len, const uint8_t* signature, size_t len) {
-// 	for (int i = 0; i < file_len - len + 1; i++) {
-// 		for (int j = 0; j < len; j++) {
-// 			if (file_data[i + j] != signature[j]) {
-// 				break;
-// 			}
-// 			printf("%d %d %d\n", i + j, j, (int) file_data[i + j + 1]);
-// 			if (j == len - 1) {
-// 				printf("HEHEHE");
-// 				return;
-// 			}
-// 		}
-// 	}
-// }
+#define NUM_THREADS_PER_BLOCK 1024
+#define BM_PARTITION_SIZE 1024
 
 __device__ void bruteForce(const char* file_data, size_t file_len, const char* signature, size_t len, int* d_sig_match) {
 	int index;
@@ -119,48 +102,54 @@ __device__ void boyerMoore(const char* file_data, size_t file_len, const char* s
 
 __global__ void matchFile(const char* file_data, size_t file_len, const char* signature, size_t len, int* d_sig_match)
 {
-	// printf("signature: %s, here \n", signature);
-	// printf("here \n");
 	// TODO: your code!
 	// bruteForce(file_data, file_len, signature, len, d_sig_match);
 	// boyerMoore(file_data, file_len, signature, len, d_sig_match);
-
-	// printf("gridDim : %d blockDim: %d\n", gridDim.x, blockDim.x);
     size_t n = BM_PARTITION_SIZE;
 
-    int volatile badchar[NO_OF_CHARS];
-	int volatile i;
+    __shared__ int badchar[NO_OF_CHARS];
+	int i;
 
-    for (i = 0; i < NO_OF_CHARS; i++) {
-        badchar[i] = -1;
-    }
+	if (threadIdx.x == 0) {
+		for (i = 0; i < NO_OF_CHARS; i++) {
+			badchar[i] = -1;
+		}
 
-    for (i = 0; i < len; i++) {
-        badchar[(int) signature[i]] = i;
-    }
+		for (i = 0; i < len; i++) {
+			badchar[(int) signature[i]] = i;
+		}
+	}
 
-    int volatile s = 0;
-	int volatile startIndex = blockIdx.x * blockDim.x * BM_PARTITION_SIZE + threadIdx.x * BM_PARTITION_SIZE;
-	// printf("start index: %d", startIndex);
+	__syncthreads();
 
-    while (s <= (n - len) && s <= (file_len - len)) {
-        int volatile j = len - 1;
+    int s = 0;
+	int startIndex = blockIdx.x * blockDim.x * BM_PARTITION_SIZE + threadIdx.x * BM_PARTITION_SIZE;
+	if (startIndex >= file_len) {
+		return;
+	}
+
+    while (s <= (n - len)) {
+        int j = len - 1;
 		
+		if (startIndex + s + j >= file_len) {
+			return; 
+		}
+
         while (j >= 0 && signature[j] == file_data[startIndex + s + j]) {
+			// printf("signature char: %c file char: %c\n", signature[j], file_data[startIndex + s + j]);
             j--;
         }
 
         if (j < 0) {
-			// printf("here\n");
             *d_sig_match = 1;
             return;
         } else {
-						int temp = (int) file_data[startIndex + s + j];
-						if (temp >= 0 && temp <= 255) {
-								s += max(1, j - badchar[temp]);
-						} else {
-								s += max(1, j + 1);
-						}
+			int temp = (int) file_data[startIndex + s + j];
+			if (temp >= 0 && temp < NO_OF_CHARS) {
+				s += max(1, j - badchar[temp]);
+			} else {
+				s += 1;
+			}
         }
     }
 }
@@ -264,7 +253,8 @@ void runScanner(std::vector<Signature>& signatures, std::vector<InputFile>& inpu
 			file_bufs[file_idx], 
 			file_contents[file_idx],
 			inputs[file_idx].size * 2,
-			cudaMemcpyHostToDevice, streams[file_idx]
+			cudaMemcpyHostToDevice, 
+			streams[file_idx]
 		);    // pass in the stream here to do this async
 
 		for(size_t sig_idx = 0; sig_idx < signatures.size(); sig_idx++)
@@ -294,7 +284,7 @@ void runScanner(std::vector<Signature>& signatures, std::vector<InputFile>& inpu
 			// printf("current file index: %zu, signature index: %zu/%zu\n", file_idx, sig_idx, signatures.size());
 			// printf("num blocks: %d\n", numBlocks);
 
-			matchFile<<<numBlocks, threadsPerBlock, /* shared memory per block: */ 0, streams[file_idx]>>>(
+			matchFile<<<numBlocks, threadsPerBlock, /* shared memory per block: */ 500, streams[file_idx]>>>(
 				file_bufs[file_idx], 
 				actualFileStringSize, 
 				sig_bufs[sig_idx], 
@@ -302,7 +292,7 @@ void runScanner(std::vector<Signature>& signatures, std::vector<InputFile>& inpu
 				match_bufs[file_idx][sig_idx]
 			);
 
-			// check_cuda_error(cudaDeviceSynchronize());
+			check_cuda_error(cudaDeviceSynchronize());
 
 			cudaMemcpyAsync(
 				host_match[file_idx][sig_idx],

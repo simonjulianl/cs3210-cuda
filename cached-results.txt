@@ -1,6 +1,6 @@
 1b4e427314efcb9959a738968015492698d03684b5d8f301c6285499afb723b8
-64616327844
-2057344891
+61926115852
+1978987117
 tests/virus-0001-Win.Downloader.Banload-242+Win.Trojan.Matrix-8.in: Win.Trojan.Matrix-8
 tests/virus-0007-Win.Trojan.Matrix-8.in: Win.Trojan.Matrix-8
 tests/virus-0011-Win.Trojan.Sdbot-52.in: Win.Trojan.Sdbot-52
