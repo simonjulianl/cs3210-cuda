@@ -151,11 +151,16 @@ __global__ void matchFile(const char* file_data, size_t file_len, const char* si
         }
 
         if (j < 0) {
-			printf("here\n");
+			// printf("here\n");
             *d_sig_match = 1;
             return;
         } else {
-            s += max(1, j - badchar[file_data[startIndex + s + j]]);
+						int temp = (int) file_data[startIndex + s + j];
+						if (temp >= 0 && temp <= 255) {
+								s += max(1, j - badchar[temp]);
+						} else {
+								s += max(1, j + 1);
+						}
         }
     }
 }
@@ -314,7 +319,7 @@ void runScanner(std::vector<Signature>& signatures, std::vector<InputFile>& inpu
 
 	for(size_t file_idx = 0; file_idx < file_contents.size(); file_idx++) {
 		for(size_t sig_idx = 0; sig_idx < signatures.size(); sig_idx++) {
-			printf("current file index: %zu, signature index: %zu/%zu result: %d\n", file_idx, sig_idx, signatures.size(), *host_match[file_idx][sig_idx]);
+			// printf("current file index: %zu, signature index: %zu/%zu result: %d\n", file_idx, sig_idx, signatures.size(), *host_match[file_idx][sig_idx]);
 			if (*host_match[file_idx][sig_idx] == 1) {
 				printf("%s: %s\n", inputs[file_idx].name.c_str(), signatures[sig_idx].name.c_str());
 			}
