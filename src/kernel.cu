@@ -40,8 +40,8 @@
 #include "defs.h"
 #define NO_OF_CHARS 256
 #define NUM_BLOCKS 1
-#define NUM_THREADS_PER_BLOCK 1024
-#define BM_PARTITION_SIZE 1024
+#define NUM_THREADS_PER_BLOCK 1
+#define BM_PARTITION_SIZE 243420
 
 // Sanity check to run on CPU
 // void cpuMatchFile(const uint8_t* file_data, size_t file_len, const uint8_t* signature, size_t len) {
@@ -119,6 +119,7 @@ __device__ void boyerMoore(const char* file_data, size_t file_len, const char* s
 
 __global__ void matchFile(const char* file_data, size_t file_len, const char* signature, size_t len, int* d_sig_match)
 {
+	// printf("signature: %s, here \n", signature);
 	// printf("here \n");
 	// TODO: your code!
 	// bruteForce(file_data, file_len, signature, len, d_sig_match);
@@ -127,8 +128,8 @@ __global__ void matchFile(const char* file_data, size_t file_len, const char* si
 	// printf("gridDim : %d blockDim: %d\n", gridDim.x, blockDim.x);
     size_t n = BM_PARTITION_SIZE;
 
-    int badchar[NO_OF_CHARS];
-	int i;
+    int volatile badchar[NO_OF_CHARS];
+	int volatile i;
 
     for (i = 0; i < NO_OF_CHARS; i++) {
         badchar[i] = -1;
@@ -138,41 +139,23 @@ __global__ void matchFile(const char* file_data, size_t file_len, const char* si
         badchar[(int) signature[i]] = i;
     }
 
-    int s = 0;
-	int startIndex = blockIdx.x * blockDim.x * BM_PARTITION_SIZE + threadIdx.x * BM_PARTITION_SIZE;
+    int volatile s = 0;
+	int volatile startIndex = blockIdx.x * blockDim.x * BM_PARTITION_SIZE + threadIdx.x * BM_PARTITION_SIZE;
 	// printf("start index: %d", startIndex);
 
-    while (s <= (n - len)) {
-        int j = len - 1;
-		int txtIndex = startIndex + s + j;
+    while (s <= (n - len) && s <= (file_len - len)) {
+        int volatile j = len - 1;
 		
-		if (txtIndex >= file_len) {
-			return; 
-		}
-
-        while (j >= 0 && signature[j] == file_data[txtIndex]) {
+        while (j >= 0 && signature[j] == file_data[startIndex + s + j]) {
             j--;
-			txtIndex--;
         }
 
-		// bool isSame = true;
-		// const char * test = "2daa5883c703e87600000083c70566b80d0a66ab83c102ff4c240475d06a006a006a026a006a0168000000c06811204000e8960000005097ff350d204000e8a1";
-		// for (int k = 0; k < len; k++) {
-		// 	if (signature[k] != test[k]) {
-		// 		isSame = false;
-		// 		break;
-		// 	}
-		// }
-
-		// if (isSame) {
-		// 	printf("testing");
-		// }
-		
         if (j < 0) {
+			printf("here\n");
             *d_sig_match = 1;
             return;
         } else {
-            s += max(1, j - badchar[file_data[txtIndex]]);
+            s += max(1, j - badchar[file_data[startIndex + s + j]]);
         }
     }
 }
@@ -242,7 +225,7 @@ void runScanner(std::vector<Signature>& signatures, std::vector<InputFile>& inpu
 
 	// allocate memory for the matches
 	std::vector<std::vector<int*>> match_bufs {};
-	for(size_t i = 0; i < inputs.size(); i++) 
+	for(size_t i = 0; i < file_contents.size(); i++) 
 	{
 		std::vector<int*> temp {};
 		for(size_t j = 0; j < signatures.size(); j++)
@@ -256,7 +239,7 @@ void runScanner(std::vector<Signature>& signatures, std::vector<InputFile>& inpu
 	}
 
 	std::vector<std::vector<int*>> host_match {};
-	for(size_t i = 0; i < inputs.size(); i++)
+	for(size_t i = 0; i < file_contents.size(); i++)
 	{
 		std::vector<int*> temp {};
 		for(size_t j = 0; j < signatures.size(); j++)
@@ -298,30 +281,13 @@ void runScanner(std::vector<Signature>& signatures, std::vector<InputFile>& inpu
 				you should *definitely* be doing more work per kernel than in our example!
 			*/
 
-			// Sanity check can be useful
-			/*
-			if (sig_idx == 68) {
-				// for (int i = 0; i < inputs[sig_idx].size; i++) {
-				// 	printf("%d ", (int) inputs[file_idx].data[i]);
-				// }
-				printf("%s\n", signatures[sig_idx].name.c_str());
-
-				uint8_t* temp = convertStringToByte(signatures[sig_idx].data, signatures[sig_idx].size);
-				for (int i = 0; i < signatures[sig_idx].size / 2; i++) {
-					printf("%d ", (int) temp[i]);
-				}
-
-				cpuMatchFile(inputs[file_idx].data, inputs[file_idx].size, temp, signatures[sig_idx].size / 2);
-			}
-			*/
-
 			int actualFileStringSize = inputs[file_idx].size * 2; // 1 byte = 2 hex
 			int threadsPerBlock = NUM_THREADS_PER_BLOCK;
 			// int numBlocks = (actualFileStringSize + threadsPerBlock - 1) / threadsPerBlock; // for brute force, replace one loop with 1 thread
 			int numBlocks = (actualFileStringSize + (NUM_THREADS_PER_BLOCK * BM_PARTITION_SIZE - 1)) / (NUM_THREADS_PER_BLOCK * BM_PARTITION_SIZE); 
 
-			printf("current signature index: %zu/%zu\n", sig_idx, signatures.size());
-			printf("num blocks: %d\n", numBlocks);
+			// printf("current file index: %zu, signature index: %zu/%zu\n", file_idx, sig_idx, signatures.size());
+			// printf("num blocks: %d\n", numBlocks);
 
 			matchFile<<<numBlocks, threadsPerBlock, /* shared memory per block: */ 0, streams[file_idx]>>>(
 				file_bufs[file_idx], 
@@ -331,8 +297,24 @@ void runScanner(std::vector<Signature>& signatures, std::vector<InputFile>& inpu
 				match_bufs[file_idx][sig_idx]
 			);
 
-			cudaMemcpy(host_match[file_idx][sig_idx], match_bufs[file_idx][sig_idx], sizeof(int), cudaMemcpyDeviceToHost);
+			// check_cuda_error(cudaDeviceSynchronize());
 
+			cudaMemcpyAsync(
+				host_match[file_idx][sig_idx],
+				match_bufs[file_idx][sig_idx], 
+				sizeof(int),
+				cudaMemcpyDeviceToHost,
+				streams[file_idx]
+			);
+		}
+	}
+
+	for(auto& s : streams)
+		cudaStreamSynchronize(s);
+
+	for(size_t file_idx = 0; file_idx < file_contents.size(); file_idx++) {
+		for(size_t sig_idx = 0; sig_idx < signatures.size(); sig_idx++) {
+			printf("current file index: %zu, signature index: %zu/%zu result: %d\n", file_idx, sig_idx, signatures.size(), *host_match[file_idx][sig_idx]);
 			if (*host_match[file_idx][sig_idx] == 1) {
 				printf("%s: %s\n", inputs[file_idx].name.c_str(), signatures[sig_idx].name.c_str());
 			}
