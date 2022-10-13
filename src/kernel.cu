@@ -38,6 +38,10 @@
 #include <iostream>
 
 #include "defs.h"
+#define NO_OF_CHARS 256
+#define NUM_BLOCKS 1
+#define NUM_THREADS_PER_BLOCK 1024
+#define BM_PARTITION_SIZE 1024
 
 // Sanity check to run on CPU
 // void cpuMatchFile(const uint8_t* file_data, size_t file_len, const uint8_t* signature, size_t len) {
@@ -73,10 +77,104 @@ __device__ void bruteForce(const char* file_data, size_t file_len, const char* s
 		}
 	}
 }
+
+__device__ void badCharHeuristic(const char *str, size_t size, int badchar[NO_OF_CHARS]) {
+    int i;
+
+    for (i = 0; i < NO_OF_CHARS; i++) {
+        badchar[i] = -1;
+    }
+
+    for (i = 0; i < size; i++) {
+        badchar[(int) str[i]] = i;
+    }
+}
+
+/* A pattern searching function that uses Bad Character Heuristic of Boyer Moore Algorithm, inspired by GFG */
+__device__ void boyerMoore(const char* file_data, size_t file_len, const char* signature, size_t len, int* d_sig_match) {
+	size_t m = len;
+    size_t n = file_len;
+
+    int badchar[NO_OF_CHARS];
+    badCharHeuristic(signature, len, badchar);
+
+    int s = 0, startIndex = blockIdx.x * blockDim.x + threadIdx.x;
+
+    while (s <= (n - m)) {
+        int j = m - 1;
+		int txtIndex = startIndex + s + j;
+
+        while (j >= 0 && signature[j] == file_data[txtIndex]) {
+            j--;
+        }
+
+        if (j < 0) {
+            *d_sig_match = 1;
+            return;
+        } else {
+            s += max(1, j - badchar[file_data[txtIndex]]);
+        }
+    }
+}
+
 __global__ void matchFile(const char* file_data, size_t file_len, const char* signature, size_t len, int* d_sig_match)
 {
+	// printf("here \n");
 	// TODO: your code!
-	bruteForce(file_data, file_len, signature, len, d_sig_match);
+	// bruteForce(file_data, file_len, signature, len, d_sig_match);
+	// boyerMoore(file_data, file_len, signature, len, d_sig_match);
+
+	// printf("gridDim : %d blockDim: %d\n", gridDim.x, blockDim.x);
+    size_t n = BM_PARTITION_SIZE;
+
+    int badchar[NO_OF_CHARS];
+	int i;
+
+    for (i = 0; i < NO_OF_CHARS; i++) {
+        badchar[i] = -1;
+    }
+
+    for (i = 0; i < len; i++) {
+        badchar[(int) signature[i]] = i;
+    }
+
+    int s = 0;
+	int startIndex = blockIdx.x * blockDim.x * BM_PARTITION_SIZE + threadIdx.x * BM_PARTITION_SIZE;
+	// printf("start index: %d", startIndex);
+
+    while (s <= (n - len)) {
+        int j = len - 1;
+		int txtIndex = startIndex + s + j;
+		
+		if (txtIndex >= file_len) {
+			return; 
+		}
+
+        while (j >= 0 && signature[j] == file_data[txtIndex]) {
+            j--;
+			txtIndex--;
+        }
+
+		// bool isSame = true;
+		// const char * test = "2daa5883c703e87600000083c70566b80d0a66ab83c102ff4c240475d06a006a006a026a006a0168000000c06811204000e8960000005097ff350d204000e8a1";
+		// for (int k = 0; k < len; k++) {
+		// 	if (signature[k] != test[k]) {
+		// 		isSame = false;
+		// 		break;
+		// 	}
+		// }
+
+		// if (isSame) {
+		// 	printf("testing");
+		// }
+		
+        if (j < 0) {
+            *d_sig_match = 1;
+            return;
+        } else {
+            s += max(1, j - badchar[file_data[txtIndex]]);
+        }
+    }
 }
 
 // Inspired by: https://gist.github.com/miguelmota/4fc9b46cf21111af5fa613555c14de92?permalink_comment_id=3085319
@@ -217,9 +315,14 @@ void runScanner(std::vector<Signature>& signatures, std::vector<InputFile>& inpu
 			}
 			*/
 
-			int threadsPerBlock = 1024;
 			int actualFileStringSize = inputs[file_idx].size * 2; // 1 byte = 2 hex
-			int numBlocks = (actualFileStringSize + threadsPerBlock - 1) / threadsPerBlock;
+			int threadsPerBlock = NUM_THREADS_PER_BLOCK;
+			// int numBlocks = (actualFileStringSize + threadsPerBlock - 1) / threadsPerBlock; // for brute force, replace one loop with 1 thread
+			int numBlocks = (actualFileStringSize + (NUM_THREADS_PER_BLOCK * BM_PARTITION_SIZE - 1)) / (NUM_THREADS_PER_BLOCK * BM_PARTITION_SIZE); 
+
+			printf("current signature index: %zu/%zu\n", sig_idx, signatures.size());
+			printf("num blocks: %d\n", numBlocks);
+
 			matchFile<<<numBlocks, threadsPerBlock, /* shared memory per block: */ 0, streams[file_idx]>>>(
 				file_bufs[file_idx], 
 				actualFileStringSize, 
