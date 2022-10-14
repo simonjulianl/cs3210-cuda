@@ -63,23 +63,8 @@ __device__ void bruteForce(const char* file_data, size_t file_len, const char* s
 
 
 /* A pattern searching function that uses Bad Character Heuristic of Boyer Moore Algorithm, inspired by GFG */
-__device__ void boyerMoore(const char* file_data, size_t file_len, const char* signature, size_t len, int* d_sig_match) {
+__device__ void boyerMoore(const char* file_data, size_t file_len, const char* signature, size_t len, int* d_sig_match, int* badchar) {
 	size_t n = BM_PARTITION_SIZE;
-
-    __shared__ int badchar[NO_OF_CHARS];
-	int i;
-
-	if (threadIdx.x == 0) {
-		for (i = 0; i < NO_OF_CHARS; i++) {
-			badchar[i] = -1;
-		}
-
-		for (i = 0; i < len; i++) {
-			badchar[(int) signature[i]] = i;
-		}
-	}
-
-	__syncthreads();
 
     int s = 0;
 	int startIndex = blockIdx.x * blockDim.x * BM_PARTITION_SIZE + threadIdx.x * BM_PARTITION_SIZE;
@@ -113,12 +98,22 @@ __device__ void boyerMoore(const char* file_data, size_t file_len, const char* s
     }
 }
 
-__global__ void matchFile(const char* file_data, size_t file_len, const char* signature, size_t len, int* d_sig_match)
+__global__ void matchFile(const char* file_data, size_t file_len, const char* signature, size_t len, int* d_sig_match, int* preprocessed_data)
 {
 	// TODO: your code!
-	bruteForce(file_data, file_len, signature, len, d_sig_match);
-	// boyerMoore(file_data, file_len, signature, len, d_sig_match);
+	// bruteForce(file_data, file_len, signature, len, d_sig_match);
+	boyerMoore(file_data, file_len, signature, len, d_sig_match, preprocessed_data);
+}
 
+__global__ void computeBadChar(const char* signature, size_t len, int badchar[NO_OF_CHARS]) {
+	int i; 
+	for (i = 0; i < NO_OF_CHARS; i++) {
+		badchar[i] = -1;
+	}
+
+	for (i = 0; i < len; i++) {
+		badchar[(int) signature[i]] = i;
+	}
 }
 
 // Inspired by: https://gist.github.com/miguelmota/4fc9b46cf21111af5fa613555c14de92?permalink_comment_id=3085319
@@ -176,13 +171,33 @@ void runScanner(std::vector<Signature>& signatures, std::vector<InputFile>& inpu
 
 	// allocate memory for the signatures
 	std::vector<char*> sig_bufs {};
+	std::vector<int*> preprocessed_bar_chars {};
+
 	for(size_t i = 0; i < signatures.size(); i++)
 	{
+		// signature pointer on device
 		char* ptr = 0;
 		check_cuda_error(cudaMalloc(&ptr, signatures[i].size));
 		cudaMemcpy(ptr, signatures[i].data, signatures[i].size, cudaMemcpyHostToDevice);
 		sig_bufs.push_back(ptr);
+
+		// bad char pointer on device
+		int* badchar = 0;
+		check_cuda_error(cudaMalloc(&badchar, sizeof(int) * NO_OF_CHARS));
+		preprocessed_bar_chars.push_back(badchar);
 	}
+
+	for(size_t i = 0; i < signatures.size(); i++) {
+		dim3 numBlock(1);
+		dim3 numThread(1);
+		computeBadChar<<<numBlock, numThread>>>(
+			sig_bufs[i], 
+			signatures[i].size, 
+			preprocessed_bar_chars[i]
+		);
+	}
+
+	check_cuda_error(cudaDeviceSynchronize());
 
 	// allocate memory for the matches
 	std::vector<std::vector<int*>> match_bufs {};
@@ -257,7 +272,8 @@ void runScanner(std::vector<Signature>& signatures, std::vector<InputFile>& inpu
 				actualFileStringSize, 
 				sig_bufs[sig_idx], 
 				signatures[sig_idx].size,
-				match_bufs[file_idx][sig_idx]
+				match_bufs[file_idx][sig_idx],
+				preprocessed_bar_chars[sig_idx]
 			);
 
 			// check_cuda_error(cudaDeviceSynchronize());
