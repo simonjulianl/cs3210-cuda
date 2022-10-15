@@ -1,31 +1,13 @@
-b03ef7bb26d51c28adb9882b48f3e735a7228847257cd70c83fd40912ef1e4c3
-93980724337
-3001198096
-tests/virus-0017-Win.Trojan.Mybot-8097+Win.Trojan.JetHome-2.in: Win.Trojan.Mybot-8097
+1b4e427314efcb9959a738968015492698d03684b5d8f301c6285499afb723b8
+61596390666
+1956900443
 tests/virus-0001-Win.Downloader.Banload-242+Win.Trojan.Matrix-8.in: Win.Trojan.Matrix-8
 tests/virus-0007-Win.Trojan.Matrix-8.in: Win.Trojan.Matrix-8
-tests/virus-0013-Win.Trojan.Pakes-518.in: Win.Trojan.Pakes-518
-tests/virus-0004-Win.Worm.Gaobot-857+Win.Worm.Delf-1443+Win.Trojan.Mybot-6497.in: Win.Worm.Gaobot-857
 tests/virus-0011-Win.Trojan.Sdbot-52.in: Win.Trojan.Sdbot-52
-tests/virus-0003-Win.Trojan.Anti-5+Win.Trojan.Mybot-8053.in: Win.Trojan.Anti-5
 tests/virus-0012-Win.Trojan.Bancos-1977+Html.Phishing.Auction-29.in: Win.Trojan.Bancos-1977
-tests/virus-0014-Win.Trojan.HIV-5+Html.Phishing.Auction-29.in: Win.Trojan.HIV-5
-tests/virus-0008-Win.Trojan.Agent-35503+Win.Trojan.Mybot-6324+Win.Trojan.Delf-802.in: Win.Trojan.Delf-802
-tests/virus-0015-Win.Spyware.Goldun-31.in: Win.Spyware.Goldun-31
-tests/virus-0014-Win.Trojan.HIV-5+Html.Phishing.Auction-29.in: Html.Phishing.Auction-29
 tests/virus-0012-Win.Trojan.Bancos-1977+Html.Phishing.Auction-29.in: Html.Phishing.Auction-29
-tests/virus-0008-Win.Trojan.Agent-35503+Win.Trojan.Mybot-6324+Win.Trojan.Delf-802.in: Win.Trojan.Agent-35503
-tests/virus-0005-Win.Trojan.Krap-1+Win.Spyware.Banker-4712.in: Win.Spyware.Banker-4712
 tests/virus-0002-Win.Downloader.Zlob-1779+Html.Phishing.Bank-532.in: Html.Phishing.Bank-532
-tests/virus-0005-Win.Trojan.Krap-1+Win.Spyware.Banker-4712.in: Win.Trojan.Krap-1
-tests/virus-0009-Win.Worm.Gaobot-688.in: Win.Worm.Gaobot-688
-tests/virus-0008-Win.Trojan.Agent-35503+Win.Trojan.Mybot-6324+Win.Trojan.Delf-802.in: Win.Trojan.Mybot-6324
 tests/virus-0002-Win.Downloader.Zlob-1779+Html.Phishing.Bank-532.in: Win.Downloader.Zlob-1779
-tests/virus-0016-Win.Trojan.Pakes-480.in: Win.Trojan.Pakes-480
-tests/virus-0003-Win.Trojan.Anti-5+Win.Trojan.Mybot-8053.in: Win.Trojan.Mybot-8053
-tests/virus-0004-Win.Worm.Gaobot-857+Win.Worm.Delf-1443+Win.Trojan.Mybot-6497.in: Win.Worm.Delf-1443
-tests/virus-0017-Win.Trojan.Mybot-8097+Win.Trojan.JetHome-2.in: Win.Trojan.JetHome-2
 tests/virus-0006-Win.Spyware.Banker-483.in: Win.Spyware.Banker-483
 tests/virus-0001-Win.Downloader.Banload-242+Win.Trojan.Matrix-8.in: Win.Downloader.Banload-242
-tests/virus-0004-Win.Worm.Gaobot-857+Win.Worm.Delf-1443+Win.Trojan.Mybot-6497.in: Win.Trojan.Mybot-6497
 tests/virus-0010-Win.Trojan.Corp-3.in: Win.Trojan.Corp-3

@@ -98,11 +98,12 @@ __device__ void boyerMoore(const char* file_data, size_t file_len, const char* s
     }
 }
 
-__global__ void matchFile(const char* file_data, size_t file_len, const char* signature, size_t len, int* d_sig_match, int* preprocessed_data)
+// __global__ void matchFile(const char* file_data, size_t file_len, const char* signature, size_t len, int* d_sig_match, int* preprocessed_data)
+__global__ void matchFile(const char* file_data, size_t file_len, const char* signature, size_t len, int* d_sig_match)
 {
 	// TODO: your code!
-	// bruteForce(file_data, file_len, signature, len, d_sig_match);
-	boyerMoore(file_data, file_len, signature, len, d_sig_match, preprocessed_data);
+	bruteForce(file_data, file_len, signature, len, d_sig_match);
+	// boyerMoore(file_data, file_len, signature, len, d_sig_match, preprocessed_data);
 }
 
 __global__ void computeBadChar(const char* signature, size_t len, int badchar[NO_OF_CHARS]) {
@@ -116,18 +117,27 @@ __global__ void computeBadChar(const char* signature, size_t len, int badchar[NO
 	}
 }
 
-// Inspired by: https://gist.github.com/miguelmota/4fc9b46cf21111af5fa613555c14de92?permalink_comment_id=3085319
-std::string uint8_to_hex_char_array(const uint8_t *v, const size_t s) {
-    std::stringstream ss;
+__device__ char convertDecToHex(int x) {
+	if (x >= 10) { 
+		return 'a' + x - 10;
+	} else {
+		return '0' + x; 
+	}
+}
 
-    ss << std::hex << std::setfill('0');
+__global__ void uint8_to_hex_char_array(uint8_t *v, const size_t s, char *out) {
+	// size of out = s * 2
+	int value, leading, remainder; 
+	int current_index = blockDim.x * blockIdx.x + threadIdx.x; 
+	if (current_index >= s) {
+		return;
+	}
 
-    for (int i = 0; i < s; i++) {
-        ss << std::hex << std::setw(2) << static_cast<int>(v[i]);
-    }
-
-	std::string result = ss.str(); 
-    return result;
+	value = static_cast<int>(v[current_index]);
+	leading = value >> 4; 
+	remainder = value & 0xf;
+	out[current_index << 1] = convertDecToHex(leading);
+	out[(current_index << 1) + 1] = convertDecToHex(remainder);
 }
 
 void runScanner(std::vector<Signature>& signatures, std::vector<InputFile>& inputs)
@@ -152,26 +162,46 @@ void runScanner(std::vector<Signature>& signatures, std::vector<InputFile>& inpu
 	streams.resize(inputs.size());
 
 	std::vector<char*> file_bufs {};
-	std::vector<char*> file_contents {}; 
-
 
 	for(size_t i = 0; i < inputs.size(); i++)
 	{
 		cudaStreamCreate(&streams[i]);
 
+		// allocate memory on the device for the uint
+		uint8_t* ptr_ori = 0; 
+		check_cuda_error(cudaMalloc(&ptr_ori, sizeof(uint8_t) * inputs[i].size));
+
 		// allocate memory on the device for the file
 		char* ptr = 0;
-
 		size_t file_char_size = inputs[i].size * 2; // 1 byte = 2 hex
-		std::string result = uint8_to_hex_char_array(inputs[i].data, inputs[i].size);
-		check_cuda_error(cudaMalloc(&ptr, file_char_size));
+		check_cuda_error(cudaMalloc(&ptr, sizeof(char) * file_char_size));
+
+		// copy the data to gpu
+		cudaMemcpyAsync(
+			ptr_ori, 
+			inputs[i].data,
+			inputs[i].size,
+			cudaMemcpyHostToDevice, 
+			streams[i]
+		);    
+
+		int num_blocks = (inputs[i].size + NUM_THREADS_PER_BLOCK - 1) / NUM_THREADS_PER_BLOCK; 
+		uint8_to_hex_char_array<<<num_blocks, NUM_THREADS_PER_BLOCK, 0, streams[i]>>>(
+			ptr_ori, 
+			inputs[i].size,
+			ptr
+		);
+
+		cudaFree(ptr_ori); 
 		file_bufs.push_back(ptr);
-		file_contents.push_back(strdup(result.c_str())); 
 	}
+
+	for(auto& s : streams)
+		cudaStreamSynchronize(s);
 
 	// allocate memory for the signatures
 	std::vector<char*> sig_bufs {};
-	std::vector<int*> preprocessed_bar_chars {};
+	// std::vector<int*> preprocessed_bar_chars {};
 
 	for(size_t i = 0; i < signatures.size(); i++)
 	{
@@ -182,26 +212,26 @@ void runScanner(std::vector<Signature>& signatures, std::vector<InputFile>& inpu
 		sig_bufs.push_back(ptr);
 
 		// bad char pointer on device
-		int* badchar = 0;
-		check_cuda_error(cudaMalloc(&badchar, sizeof(int) * NO_OF_CHARS));
-		preprocessed_bar_chars.push_back(badchar);
+		// int* badchar = 0;
+		// check_cuda_error(cudaMalloc(&badchar, sizeof(int) * NO_OF_CHARS));
+		// preprocessed_bar_chars.push_back(badchar);
 	}
 
-	for(size_t i = 0; i < signatures.size(); i++) {
-		dim3 numBlock(1);
-		dim3 numThread(1);
-		computeBadChar<<<numBlock, numThread>>>(
-			sig_bufs[i], 
-			signatures[i].size, 
-			preprocessed_bar_chars[i]
-		);
-	}
+	// for(size_t i = 0; i < signatures.size(); i++) {
+	// 	dim3 numBlock(1);
+	// 	dim3 numThread(1);
+	// 	computeBadChar<<<numBlock, numThread>>>(
+	// 		sig_bufs[i], 
+	// 		signatures[i].size, 
+	// 		preprocessed_bar_chars[i]
+	// 	);
+	// }
 
-	check_cuda_error(cudaDeviceSynchronize());
+	// check_cuda_error(cudaDeviceSynchronize());
 
 	// allocate memory for the matches
 	std::vector<std::vector<int*>> match_bufs {};
-	for(size_t i = 0; i < file_contents.size(); i++) 
+	for(size_t i = 0; i < file_bufs.size(); i++) 
 	{
 		std::vector<int*> temp {};
 		for(size_t j = 0; j < signatures.size(); j++)
@@ -215,7 +245,7 @@ void runScanner(std::vector<Signature>& signatures, std::vector<InputFile>& inpu
 	}
 
 	std::vector<std::vector<int*>> host_match {};
-	for(size_t i = 0; i < file_contents.size(); i++)
+	for(size_t i = 0; i < file_bufs.size(); i++)
 	{
 		std::vector<int*> temp {};
 		for(size_t j = 0; j < signatures.size(); j++)
@@ -227,19 +257,19 @@ void runScanner(std::vector<Signature>& signatures, std::vector<InputFile>& inpu
 		host_match.push_back(temp);
 	}
 
-	for(size_t file_idx = 0; file_idx < file_contents.size(); file_idx++)
+	for(size_t file_idx = 0; file_idx < file_bufs.size(); file_idx++)
 	{
 		// asynchronously copy the file contents from host memory
 		// (the `inputs`) to device memory (file_bufs, which we allocated above)
 		int actualFileStringSize = inputs[file_idx].size * 2; // 1 byte = 2 hex
 
-		cudaMemcpyAsync(
-			file_bufs[file_idx], 
-			file_contents[file_idx],
-			actualFileStringSize,
-			cudaMemcpyHostToDevice, 
-			streams[file_idx]
-		);    // pass in the stream here to do this async
+		// cudaMemcpyAsync(
+		// 	file_bufs[file_idx], 
+		// 	file_contents[file_idx],
+		// 	actualFileStringSize,
+		// 	cudaMemcpyHostToDevice, 
+		// 	streams[file_idx]
+		// );    // pass in the stream here to do this async
 
 		for(size_t sig_idx = 0; sig_idx < signatures.size(); sig_idx++)
 		{
@@ -264,19 +294,16 @@ void runScanner(std::vector<Signature>& signatures, std::vector<InputFile>& inpu
 			int numBlocks = (actualFileStringSize + threadsPerBlock - 1) / threadsPerBlock; // for brute force, replace one loop with 1 thread
 			// int numBlocks = (actualFileStringSize + (NUM_THREADS_PER_BLOCK * BM_PARTITION_SIZE - 1)) / (NUM_THREADS_PER_BLOCK * BM_PARTITION_SIZE); 
 
-			// printf("current file index: %zu, signature index: %zu/%zu\n", file_idx, sig_idx, signatures.size());
-			// printf("num blocks: %d\n", numBlocks);
-
 			matchFile<<<numBlocks, threadsPerBlock, /* shared memory per block: */ 0, streams[file_idx]>>>(
 				file_bufs[file_idx], 
 				actualFileStringSize, 
 				sig_bufs[sig_idx], 
 				signatures[sig_idx].size,
-				match_bufs[file_idx][sig_idx],
-				preprocessed_bar_chars[sig_idx]
+				match_bufs[file_idx][sig_idx]
+				// preprocessed_bar_chars[sig_idx]
 			);
 
-			// check_cuda_error(cudaDeviceSynchronize());
+			check_cuda_error(cudaDeviceSynchronize());
 
 			cudaMemcpyAsync(
 				host_match[file_idx][sig_idx],
@@ -285,13 +312,15 @@ void runScanner(std::vector<Signature>& signatures, std::vector<InputFile>& inpu
 				cudaMemcpyDeviceToHost,
 				streams[file_idx]
 			);
+
+			check_cuda_error(cudaDeviceSynchronize());
 		}
 	}
 
 	for(auto& s : streams)
 		cudaStreamSynchronize(s);
 
-	for(size_t file_idx = 0; file_idx < file_contents.size(); file_idx++) {
+	for(size_t file_idx = 0; file_idx < file_bufs.size(); file_idx++) {
 		for(size_t sig_idx = 0; sig_idx < signatures.size(); sig_idx++) {
 			// printf("current file index: %zu, signature index: %zu/%zu result: %d\n", file_idx, sig_idx, signatures.size(), *host_match[file_idx][sig_idx]);
 			if (*host_match[file_idx][sig_idx] == 1) {
