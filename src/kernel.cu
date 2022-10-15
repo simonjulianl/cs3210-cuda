@@ -333,6 +333,11 @@ void runScanner(std::vector<Signature>& signatures, std::vector<InputFile>& inpu
 		for(auto b: buf)
 			cudaFree(b);
 
+	
+	for(auto buf: host_match)
+		for(auto b: buf)
+			free(b);
+
 	// free the device memory, though this is not strictly necessary
 	// (the CUDA driver will clean up when your program exits)
 	for(auto buf : file_bufs)
