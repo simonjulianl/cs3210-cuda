@@ -238,7 +238,7 @@ void runScanner(std::vector<Signature>& signatures, std::vector<InputFile>& inpu
 		{
 			int* ptr = 0;
 			check_cuda_error(cudaMalloc(&ptr, sizeof(int)));
-			cudaMemcpy(ptr, 0, sizeof(int), cudaMemcpyHostToDevice);
+			cudaMemset(ptr, 0, sizeof(int));
 			temp.push_back(ptr);
 		}
 		match_bufs.push_back(temp);
@@ -303,7 +303,7 @@ void runScanner(std::vector<Signature>& signatures, std::vector<InputFile>& inpu
 				// preprocessed_bar_chars[sig_idx]
 			);
 
-			check_cuda_error(cudaDeviceSynchronize());
+			// check_cuda_error(cudaDeviceSynchronize());
 
 			cudaMemcpyAsync(
 				host_match[file_idx][sig_idx],
@@ -313,7 +313,7 @@ void runScanner(std::vector<Signature>& signatures, std::vector<InputFile>& inpu
 				streams[file_idx]
 			);
 
-			check_cuda_error(cudaDeviceSynchronize());
+			// check_cuda_error(cudaDeviceSynchronize());
 		}
 	}
 
