@@ -8,11 +8,11 @@ OUTPUT        := scanner
 
 EXEC_SEQ      := scanner-seq
 EXEC          := scanner
-SIGNATURES    := signatures/sigs-exact.txt
+SIGNATURES    := signatures/sigs.txt
 
 SAMPLE_INPUT  := virus-0001-Win.Downloader.Banload-242+Win.Trojan.Matrix-8.in
 SAMPLE_INPUT2 := virus-0002-Win.Downloader.Zlob-1779+Html.Phishing.Bank-532.in
-SOURCES := $(wildcard tests/*.in)
+SOURCES := $(wildcard testing/*.in)
 
 .DEFAULT_TARGET: all
 
@@ -46,7 +46,7 @@ compare10: all
 	./check.py signatures/sigs-both.txt tests/virus-0002-Win.Downloader.Zlob-1779+Html.Phishing.Bank-532.in tests/benign-0001.in tests/virus-0006-Win.Spyware.Banker-483.in tests/virus-0012-Win.Trojan.Bancos-1977+Html.Phishing.Auction-29.in tests/virus-0011-Win.Trojan.Sdbot-52.in tests/benign-0002.in tests/virus-0010-Win.Trojan.Corp-3.in tests/benign-0003.in tests/virus-0007-Win.Trojan.Matrix-8.in tests/virus-0001-Win.Downloader.Banload-242+Win.Trojan.Matrix-8.in
 
 compare_all: all 
-	./check.py signatures/sigs-both.txt ${SOURCES}
+	./check.py signatures/sigs.txt ${SOURCES}
 
 clean:
 	rm -f $(OUTPUT)
